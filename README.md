@@ -28,5 +28,5 @@ Sebutkan field data yang terdapat TCP Header serta ukurannya, ilustrasikan, dan 
 - Control flags (up to 9 bits): menjadi pengarah untuk mengatur flow data pada situasi-situasi spesifik
 - Window size (2 bytes): menandakan ukuran window
 - TCP checksum (2 bytes): sebagai fasilitas pendeteksian error pada paket
-- Urgent pointer (2 bytes)
-- TCP optional data (0-40 bytes)
+- Urgent pointer (2 bytes): dapat menandakan pesan yang memerlukan pemrosesan prioritas
+- TCP optional data (0-40 bytes): mendukung acknowledgement khusus atau window scaling algorithms
