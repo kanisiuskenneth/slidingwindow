@@ -14,8 +14,7 @@ Cara kerja sliding window:
 3. Setiap kali receiver sudah menerima paket, receiver akan memeriksa nilai checksum dan seqnum terlebih dahulu sebelum mengirim ACK. Seqnum yang diterima adalah seqnum yang >= LAF (Largest Acceptable Frame), di mana LAF sendiri = LFR (Last Frame Received) + RWS (Receiving Window Size).
 4. Saat sender menerima ACK, sender akan memeriksa apakah ACK tersebut adalah ACK yang "diharapkan" atau tidak. Jika tidak, sender akan me-reset window. Jika sesuai, sender akan mengirim paket selanjutnya.
 5. Jika sender tidak menerima ACK sampai waktu yang ditentukan, sender akan me-reset window.
-Fungsi-fungsi yang terkait dengan sliding window pada program adalah:
-1. 
+Kami tidak menggunakan fungsi yang terkait dengan sliding window pada program kami. 
 
 Apa yang terjadi jika advertised window yang dikirim bernilai 0? Apa cara untuk menangani hal tersebut?
 Saat advertised window = x, sender tidak dapat mengirim lebih dari x byte data tanpa sebelum menerima ACK yang diharapkan. Maka, jika advertised window = 0, sender tidak dapat mengirim data ke receiver. Biasanya ini terjadi jika buffer receiver sudah penuh. Sender akan menunggu advertised window > 0 untuk mengirim data berikutnya.
@@ -32,3 +31,8 @@ Sebutkan field data yang terdapat TCP Header serta ukurannya, ilustrasikan, dan 
 - TCP checksum (2 bytes): sebagai fasilitas pendeteksian error pada paket
 - Urgent pointer (2 bytes): dapat menandakan pesan yang memerlukan pemrosesan prioritas
 - TCP optional data (0-40 bytes): mendukung acknowledgement khusus atau window scaling algorithms
+
+Pembagian tugas
+1. Kanisius Kenneth Halim : Sliding Window
+2. Helena Suzane Ringoringo : Receiver
+3. Irene Edria Devina : Sender
