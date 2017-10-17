@@ -60,8 +60,8 @@ int main(int argc, char** args) {
 
     string msg; 
 
-	int windowsize = atoi(args[2]);
-	int port = atoi(args[4]);
+	uint32_t windowsize = atoi(args[2]);
+	uint32_t port = atoi(args[4]);
     char* filename = args[1];
     char* buffer = new char[buffersize];
     char* windowbuff = new char[windowsize];
@@ -74,7 +74,7 @@ int main(int argc, char** args) {
     char buf[9];
      
     //create a UDP socket
-    if ((s=socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) == -1)
+    if ((int)(s=socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) == -1)
     {
         die("socket");
     }
@@ -101,7 +101,7 @@ int main(int argc, char** args) {
     }
     writeLog("Output file created");
     //keep listening for data
-    int bp(0), exp_packet(0), lfa;
+    uint32_t bp(0), exp_packet(0), lfa;
     bool endloop = false;
     while(!endloop)
     {
@@ -186,8 +186,7 @@ int main(int argc, char** args) {
                 continue;
             }
         }   
-        int sleep = rand() % 5000000;
-        usleep(sleep);
+   
     }
     shutdown(s, 2);
     return 0;

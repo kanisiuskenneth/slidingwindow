@@ -9,7 +9,7 @@ class Packet {
 	char* data;
 	Packet(char _data, uint32_t seqNum) {
 		data = new char[9];
-		for(int i=0; i < sizeof(data); ++i) {
+		for(size_t i=0; i < sizeof(data); ++i) {
 			data[i] = 0x00;
 		}
 		data[0] = 0x01; //STH

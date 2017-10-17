@@ -29,7 +29,7 @@ void writeLog(string message) {
 
 
 
-void flushbuffer(char* buffer, FILE * ifile, int &len, bool &lastflush) {
+void flushbuffer(char* buffer, FILE * ifile, uint32_t &len, bool &lastflush) {
 	int it= 0;
 	char data;
 	writeLog("Flushing Buffer, rewriting buffer with:");
@@ -58,9 +58,9 @@ void itostring(uint32_t x, string &s) {
 
 int main(int argc, char** args) {
 	char* filename;
-	int windowsize;
+	uint32_t windowsize;
 	char* destination_ip;
-	int destination_port;
+	uint32_t destination_port;
 	char* buffer;
 	time_t now = time (0);
 	char time[100];
@@ -105,7 +105,7 @@ int main(int argc, char** args) {
  	ifile = fopen (filename,"r");
  	writeLog(("Opening source file"));
  	 if(ifile) {
- 	 	int filledlength;
+ 	 	uint32_t filledlength;
  	 	bool lastflush;
  	 	uint32_t cws(0), bp(0);
  	 	uint32_t lfs = 0, lar = 0, start_lfs, start_bp;
