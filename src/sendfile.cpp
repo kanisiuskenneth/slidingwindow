@@ -189,7 +189,6 @@ int main(int argc, char** args) {
 				 				bp=0;
 				 				start_bp=0;
 			 				} else {
-			 					printf("%d\n", lastflush);
 				 				endloop = true;
 				 				writeLog("Transfer Done");
 				 				break;
