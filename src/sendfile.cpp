@@ -89,12 +89,20 @@ int main(int argc, char** args) {
         return 1;
     }
 
+    for(uint32_t i=0;i<buffersize;i++) {
+    	buffer[i] = 0;
+    }
+
     struct timeval tv;
 	tv.tv_sec = 1;
 	tv.tv_usec = 0;
 	if (setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO,&tv,sizeof(tv)) < 0) {
 	   writeLog("Socket Error");
 	}
+	if (setsockopt (fd, SOL_SOCKET, SO_SNDTIMEO, &tv,sizeof(tv)) < 0) {
+		writeLog("Socket Error");
+	}
+
     struct sockaddr_in serveraddr, rbuffer;
     memset( &serveraddr, 0, sizeof(serveraddr) );
     serveraddr.sin_family = AF_INET;
@@ -116,27 +124,26 @@ int main(int argc, char** args) {
  	 	start_lfs = lfs;
  	 	start_bp = bp;
  	 	while(!endloop) {
+ 	 		fprintf(stderr, "%d %d\n", lastflush, endloop);
  	 		string buf;
- 	 		
  	 		string msg = "Starting Window (LAR, LFS, CWS): ";
  	 		itostring(lar, buf);
  	 		msg+=buf;
  	 		itostring(lfs, buf);
  	 		msg += " ";
  	 		msg+=buf;
-
  	 		msg += " ";
  	 		itostring(cws, buf);
  	 		msg+=buf;
  	 		writeLog(msg);
-
+ 	 		fprintf(stderr, "%d %d %d\n",start_bp, bp, filledlength);
  	 		while((lfs - lar) <= cws && bp < filledlength) {
  	 			char datastring[5];
  	 			sprintf(datastring,"0x%02x" , buffer[bp]);
 
  	 			Packet sendpacket(buffer[bp], lfs);
  	 			lfs++;
- 	 			bp++;
+ 	 			bp++; 
  	 			string msg = "Sending Data (data, seqnum): ";
  	 			msg += datastring;
  	 			msg += " ";
@@ -149,6 +156,8 @@ int main(int argc, char** args) {
 		        }
 		        writeLog( "Message Sent" );
 	    	}
+
+
 	    	char data[7];
 	    	uint32_t slen;
 
@@ -162,55 +171,57 @@ int main(int argc, char** args) {
 		 		itostring(rack.getSeqNum(), seqnumstring);
 		 		string msg = "Got ACK (seqnum): ";
 		 		msg += seqnumstring;
-		 		writeLog(msg); 
-		 		if(rack.getSeqNum() != lar+1 || !rack.checkChecksum()) {
+		 		writeLog(msg);
+		 		if(rack.getSeqNum() < lar+1 || !rack.checkChecksum()) {
 		 			writeLog("Expected ack not found, reseting window\n");
-		 			bp = start_bp;
+		  			bp = start_bp;
 		 			lfs = start_lfs;
-		 			
-					cws = min(min((uint32_t)windowsize, (uint32_t)rack.getAWS()), (uint32_t)(filledlength - bp - 1));	 			
-		 		} 
+					cws = min(min((uint32_t)windowsize, (uint32_t)rack.getAWS()), (uint32_t)(filledlength - bp));
+		 		}
 		 		else {
-		 			start_bp++;
-		 			start_lfs++;
-		 			lar++;
-		 			cws = min(cws, (uint32_t)rack.getAWS());	 			
-		 			if(bp == filledlength) {
-		 				writeLog("Expected ack found, ready to receiving next data");
-		 				if(!lastflush) {
-		 					writeLog("Buffer used, flushing buffer");
-		 					flushbuffer(buffer,ifile,filledlength,lastflush);		 					
-			 				bp=0;
-		 				} else {
-		 					if(rack.getSeqNum() == lfs) {
-			 					endloop = true;
-			 					writeLog("Transfer Done");
-			 					break;
-		 					}	
+		 			while(rack.getSeqNum() > lar && !endloop) {
+		 				fprintf(stderr, "%d %d %d %d %d\n", rack.getSeqNum(), lar, lfs, bp, start_bp);
+						lar++;
+		 				start_bp++;
+		 				if(start_bp>=filledlength) {
+		 					if(!lastflush) {
+			 					writeLog("Buffer used, flushing buffer");
+			 					flushbuffer(buffer,ifile,filledlength,lastflush);
+				 				bp=0;
+				 				start_bp=0;
+			 				} else {
+				 				endloop = true;
+				 				writeLog("Transfer Done");
+				 				break;
+		 					}
 		 				}
-		 				
-		 			} else {
-		 				writeLog("Expected ack found, sending next data");
 		 			}
+
+		 			bp = max(bp, start_bp);
+		 			lfs = max(bp, start_lfs);
+		 			start_lfs = lar;
+		 			cws = min(cws, (uint32_t)rack.getAWS());
 		 		}
 		 	}
 	    }
 	    fclose(ifile);
-	    fclose(log);
 
 	 	Packet terminator(0x00, lfs);
 	 	terminator.setAsEnd();
 	 	int count = 0;
 	    while( count < 10) {
+	    	writeLog("Sending Terminator Packet...");
 	 		sendto( fd, terminator.getRawData(), 9, 0, (struct sockaddr *)&serveraddr, sizeof(serveraddr));
 	 		char data[7];
 	 		socklen_t slen;
 	 		if(recvfrom(fd, data, 7, 0, (struct sockaddr *) &rbuffer,  &slen) >= 0) {
 	 			Ack tack(data);
-	 			if(tack.getSeqNum() == lfs+1 && tack.checkChecksum()) {
+	 			if(tack.getSeqNum() > lfs  && tack.checkChecksum()) {
 	 				writeLog("ACK for terminator packet has been received, ending program...");
 	 				break;
 	 			} 
+	 		} else{
+	 			writeLog("Timeout");
 	 		}
 	 		writeLog("ACK for terminator packet haven't been received, resending terminator packet");
 	 		count ++;

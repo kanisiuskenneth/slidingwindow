@@ -123,7 +123,6 @@ int main(int argc, char** args) {
         msg += " ";
         msg += hexData;
         writeLog(msg);
-
         if(receivedPacket.getSeqNum() == lfr) {
             writeLog("Expected data found, writting in buffer, sliding window\n");
             windowbuff[0] = receivedPacket.getData();
@@ -131,7 +130,7 @@ int main(int argc, char** args) {
             int cwh = 0;
             do {
                 if(eoffound) {
-                    continue;
+                    break;
                 }
                 buffer[bp] = windowbuff[cwh];
                 bp++;
@@ -141,26 +140,29 @@ int main(int argc, char** args) {
                     bp = 0;
                 }
                 windowbuff[cwh]  = 0x00;
-                Ack sendack;
                 lfr++;
-                sendack.setSeqNum(lfr);
-                sendack.setAWS(min(buffersize - bp, windowsize));
-                sendack.setChecksum();
-
-                msg = "Sending ACK: ";
-                msg += to_string(sendack.getSeqNum());
-                writeLog(msg);
-                if (sendto(s, sendack.getRawData(), 7, 0, (struct sockaddr*) &si_other, slen) == -1)
-                {
-                    die("sendto()");
-                }
                 cwh++;
             } while(windowbuff[cwh] != 0x00);
-            if(eoffound) {
+            for(uint32_t i = 0; i < windowsize; i++) {
+                windowbuff[i] = 0;
+            }
+            if(!eoffound){
+            Ack sendack;
+            sendack.setSeqNum(lfr);
+            sendack.setAWS(min(buffersize - bp, windowsize));
+            sendack.setChecksum();
+
+            msg = "Sending ACK: ";
+            msg += to_string(sendack.getSeqNum());
+            writeLog(msg);
+                if (sendto(s, sendack.getRawData(), 7, 0, (struct sockaddr*) &si_other, slen) == -1){
+                    die("sendto()");
+                }
+            } else {
                     writeLog("EOF found\n");
                     writeLog("Terminating Connection");
                     Ack tack;
-                    tack.setSeqNum(++lfr);
+                    tack.setSeqNum(lfr+1);
                     tack.setChecksum();
                     if (sendto(s, tack.getRawData(), 7, 0, (struct sockaddr*) &si_other, slen) == -1)
                     {
@@ -170,12 +172,20 @@ int main(int argc, char** args) {
                     flushbuffer(buffer, of, bp);
                     fclose(of);
             }
-        } else {
+        }
+         else {
             writeLog("Expected data not found, ");
             Ack sendack;
             sendack.setSeqNum(lfr);
             sendack.setAWS(min(buffersize - bp, windowsize));
             sendack.setChecksum();
+            msg = "Sending ACK: ";
+            msg += to_string(sendack.getSeqNum());
+            writeLog(msg);
+            if (sendto(s, sendack.getRawData(), 7, 0, (struct sockaddr*) &si_other, slen) == -1)
+            {
+                die("sendto()");
+            }
 
             if(receivedPacket.getSeqNum() <= lfa && receivedPacket.getSeqNum() >= lfr) {
                writeLog("Writting in window");
