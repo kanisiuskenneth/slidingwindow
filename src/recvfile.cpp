@@ -95,11 +95,11 @@ int main(int argc, char** args) {
     }
     writeLog("Output file created");
     //keep listening for data
-    uint32_t bp(0), exp_packet(0), lfa;
+    uint32_t bp(0), lfr(0), lfa;
     bool endloop = false;
     while(!endloop)
     {
-        lfa = exp_packet + windowsize;
+        lfa = lfr + windowsize;
         writeLog("Waiting for data...");
         fflush(stdout);
 
@@ -124,7 +124,7 @@ int main(int argc, char** args) {
         msg += hexData;
         writeLog(msg);
 
-        if(receivedPacket.getSeqNum() == exp_packet) {
+        if(receivedPacket.getSeqNum() == lfr) {
             writeLog("Expected data found, writting in buffer, sliding window\n");
             windowbuff[0] = receivedPacket.getData();
             bool eoffound = (receivedPacket.getRawData()[0] & 0xff) == 0xff;
@@ -142,15 +142,14 @@ int main(int argc, char** args) {
                 }
                 windowbuff[cwh]  = 0x00;
                 Ack sendack;
-                exp_packet++;
-                sendack.setSeqNum(exp_packet);
+                lfr++;
+                sendack.setSeqNum(lfr);
                 sendack.setAWS(min(buffersize - bp, windowsize));
                 sendack.setChecksum();
 
                 msg = "Sending ACK: ";
                 msg += to_string(sendack.getSeqNum());
                 writeLog(msg);
-                //now reply the client with the same data
                 if (sendto(s, sendack.getRawData(), 7, 0, (struct sockaddr*) &si_other, slen) == -1)
                 {
                     die("sendto()");
@@ -160,6 +159,13 @@ int main(int argc, char** args) {
             if(eoffound) {
                     writeLog("EOF found\n");
                     writeLog("Terminating Connection");
+                    Ack tack;
+                    tack.setSeqNum(++lfr);
+                    tack.setChecksum();
+                    if (sendto(s, tack.getRawData(), 7, 0, (struct sockaddr*) &si_other, slen) == -1)
+                    {
+                        die("sendto()");
+                    }
                     endloop = true;
                     flushbuffer(buffer, of, bp);
                     fclose(of);
@@ -167,13 +173,13 @@ int main(int argc, char** args) {
         } else {
             writeLog("Expected data not found, ");
             Ack sendack;
-            sendack.setSeqNum(exp_packet);
+            sendack.setSeqNum(lfr);
             sendack.setAWS(min(buffersize - bp, windowsize));
             sendack.setChecksum();
 
-            if(receivedPacket.getSeqNum() <= lfa && receivedPacket.getSeqNum() >= exp_packet) {
+            if(receivedPacket.getSeqNum() <= lfa && receivedPacket.getSeqNum() >= lfr) {
                writeLog("Writting in window");
-               windowbuff[receivedPacket.getSeqNum() - exp_packet] = receivedPacket.getData();
+               windowbuff[receivedPacket.getSeqNum() - lfr] = receivedPacket.getData();
             } else {
                 writeLog("Rejecting packet");
                 continue;

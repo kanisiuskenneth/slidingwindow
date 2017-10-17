@@ -198,12 +198,28 @@ int main(int argc, char** args) {
 	    fclose(ifile);
 	    fclose(log);
 
-	 	 Packet terminator(0x00, lfs);
-	 	 terminator.setAsEnd();
-	 	 sendto( fd, terminator.getRawData(), 9, 0, (struct sockaddr *)&serveraddr, sizeof(serveraddr));
-	     
- 	 }
+	 	Packet terminator(0x00, lfs);
+	 	terminator.setAsEnd();
+	 	int count = 0;
+	    while( count < 10) {
+	 		sendto( fd, terminator.getRawData(), 9, 0, (struct sockaddr *)&serveraddr, sizeof(serveraddr));
+	 		char data[7];
+	 		socklen_t slen;
+	 		if(recvfrom(fd, data, 7, 0, (struct sockaddr *) &rbuffer,  &slen) >= 0) {
+	 			Ack tack(data);
+	 			if(tack.getSeqNum() == lfs+1 && tack.checkChecksum()) {
+	 				writeLog("ACK for terminator packet has been received, ending program...");
+	 				break;
+	 			} 
+	 		}
+	 		writeLog("ACK for terminator packet haven't been received, resending terminator packet");
+	 		count ++;
+	 	}
+	 	if(count == 10) {
+	 		writeLog("Receiver doesn't responding, ending program");
+	 	}
 
      shutdown(fd, 2);
+	}
 	return 0;
 }
