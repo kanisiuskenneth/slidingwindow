@@ -111,10 +111,11 @@ int main(int argc, char** args) {
     
 	FILE * ifile;
  	ifile = fopen (filename,"r");
+ 	clock_t begin = clock();
  	writeLog(("Opening source file"));
  	 if(ifile) {
  	 	uint32_t filledlength;
- 	 	bool lastflush;
+ 	 	bool lastflush = false;
  	 	uint32_t cws(0), bp(0);
  	 	uint32_t lfs = 0, lar = 0, start_lfs, start_bp;
  	 	cws = windowsize;
@@ -124,7 +125,6 @@ int main(int argc, char** args) {
  	 	start_lfs = lfs;
  	 	start_bp = bp;
  	 	while(!endloop) {
- 	 		fprintf(stderr, "%d %d\n", lastflush, endloop);
  	 		string buf;
  	 		string msg = "Starting Window (LAR, LFS, CWS): ";
  	 		itostring(lar, buf);
@@ -136,7 +136,7 @@ int main(int argc, char** args) {
  	 		itostring(cws, buf);
  	 		msg+=buf;
  	 		writeLog(msg);
- 	 		fprintf(stderr, "%d %d %d\n",start_bp, bp, filledlength);
+ 	 		//fprintf(stderr, "%d %d %d\n",start_bp, bp, filledlength);
  	 		while((lfs - lar) <= cws && bp < filledlength) {
  	 			char datastring[5];
  	 			sprintf(datastring,"0x%02x" , buffer[bp]);
@@ -179,8 +179,7 @@ int main(int argc, char** args) {
 					cws = min(min((uint32_t)windowsize, (uint32_t)rack.getAWS()), (uint32_t)(filledlength - bp));
 		 		}
 		 		else {
-		 			while(rack.getSeqNum() > lar && !endloop) {
-		 				fprintf(stderr, "%d %d %d %d %d\n", rack.getSeqNum(), lar, lfs, bp, start_bp);
+		 			while(rack.getSeqNum() > lar) {
 						lar++;
 		 				start_bp++;
 		 				if(start_bp>=filledlength) {
@@ -190,6 +189,7 @@ int main(int argc, char** args) {
 				 				bp=0;
 				 				start_bp=0;
 			 				} else {
+			 					printf("%d\n", lastflush);
 				 				endloop = true;
 				 				writeLog("Transfer Done");
 				 				break;
@@ -198,9 +198,9 @@ int main(int argc, char** args) {
 		 			}
 
 		 			bp = max(bp, start_bp);
-		 			lfs = max(bp, start_lfs);
+		 			lfs = max(lfs, start_lfs);
 		 			start_lfs = lar;
-		 			cws = min(cws, (uint32_t)rack.getAWS());
+		 			cws = min(windowsize, (uint32_t)rack.getAWS());
 		 		}
 		 	}
 	    }
@@ -229,6 +229,14 @@ int main(int argc, char** args) {
 	 	if(count == 10) {
 	 		writeLog("Receiver doesn't responding, ending program");
 	 	}
+	 	clock_t end = clock();
+	 	char timestamp[20];
+	 	double timespent = (double)(end - begin) / CLOCKS_PER_SEC;
+	 	sprintf(timestamp, "%.2f", timespent);
+	 	string msg = "Program ended: ";
+	 	msg += timestamp;
+	 	msg += " s elapsed";
+	 	writeLog(msg);
 
      shutdown(fd, 2);
 	}
