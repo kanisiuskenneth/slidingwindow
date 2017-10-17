@@ -146,7 +146,7 @@ int main(int argc, char** args) {
             for(uint32_t i = 0; i < windowsize; i++) {
                 windowbuff[i] = 0;
             }
-            if(!eoffound){
+            if(!eoffound) {
             Ack sendack;
             sendack.setSeqNum(lfr);
             sendack.setAWS(min(buffersize - bp, windowsize));
@@ -158,7 +158,8 @@ int main(int argc, char** args) {
                 if (sendto(s, sendack.getRawData(), 7, 0, (struct sockaddr*) &si_other, slen) == -1){
                     die("sendto()");
                 }
-            } else {
+            }
+            if(eoffound) {
                     writeLog("EOF found\n");
                     writeLog("Terminating Connection");
                     Ack tack;
@@ -172,22 +173,21 @@ int main(int argc, char** args) {
                     flushbuffer(buffer, of, bp);
                     fclose(of);
             }
-        }
-         else {
+        } else {
             writeLog("Expected data not found, ");
-            Ack sendack;
-            sendack.setSeqNum(lfr);
-            sendack.setAWS(min(buffersize - bp, windowsize));
-            sendack.setChecksum();
-            msg = "Sending ACK: ";
-            msg += to_string(sendack.getSeqNum());
-            writeLog(msg);
-            if (sendto(s, sendack.getRawData(), 7, 0, (struct sockaddr*) &si_other, slen) == -1)
-            {
-                die("sendto()");
-            }
 
             if(receivedPacket.getSeqNum() <= lfa && receivedPacket.getSeqNum() >= lfr) {
+                Ack sendack;
+                sendack.setSeqNum(lfr);
+                sendack.setAWS(min(buffersize - bp, windowsize));
+                sendack.setChecksum();
+                msg = "Sending ACK: ";
+                msg += to_string(sendack.getSeqNum());
+                writeLog(msg);
+                if (sendto(s, sendack.getRawData(), 7, 0, (struct sockaddr*) &si_other, slen) == -1)
+                {
+                    die("sendto()");
+                }
                writeLog("Writting in window");
                windowbuff[receivedPacket.getSeqNum() - lfr] = receivedPacket.getData();
             } else {
