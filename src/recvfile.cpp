@@ -11,9 +11,8 @@
 #include <unistd.h>
 #include <algorithm>
 
-using namespace std; 
+using namespace std;
 
- 
 #define buffersize 256  //Max length of buffer
 void die(string s)
 {
@@ -58,34 +57,29 @@ int main(int argc, char** args) {
     fprintf (log,"%s\n", timex);
     fclose(log);
 
-    string msg; 
+    string msg;
 
 	uint32_t windowsize = atoi(args[2]);
 	uint32_t port = atoi(args[4]);
     char* filename = args[1];
     char* buffer = new char[buffersize];
     char* windowbuff = new char[windowsize];
-    for(int i= 0; i< windowsize;i++) {
+    for(uint32_t i= 0; i< windowsize;i++) {
         windowbuff[i] = 0x00;
     }
     struct sockaddr_in si_me, si_other;
-     
     unsigned int s, slen = sizeof(si_other) , recv_len;
     char buf[9];
-     
     //create a UDP socket
     if ((int)(s=socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) == -1)
     {
         die("socket");
     }
-     
     // zero out the structure
     memset((char *) &si_me, 0, sizeof(si_me));
-     
     si_me.sin_family = AF_INET;
     si_me.sin_port = htons(port);
     si_me.sin_addr.s_addr = htonl(INADDR_ANY);
-     
     //bind socket to port
     if( bind(s , (struct sockaddr*)&si_me, sizeof(si_me) ) == -1)
     {
@@ -108,10 +102,9 @@ int main(int argc, char** args) {
         lfa = exp_packet + windowsize;
         writeLog("Waiting for data...");
         fflush(stdout);
-        
 
         //try to receive some data, this is a blocking call
-        if ((recv_len = recvfrom(s, buf, 9, 0, (struct sockaddr *) &si_other, &slen)) == -1)
+        if ((recv_len = recvfrom(s, buf, 9, 0, (struct sockaddr *) &si_other, &slen)) == (unsigned)-1)
         {
             die("recvfrom()");
         }
@@ -136,7 +129,7 @@ int main(int argc, char** args) {
             windowbuff[0] = receivedPacket.getData();
             bool eoffound = (receivedPacket.getRawData()[0] & 0xff) == 0xff;
             int cwh = 0;
-            do { 
+            do {
                 if(eoffound) {
                     continue;
                 }
@@ -156,13 +149,13 @@ int main(int argc, char** args) {
 
                 msg = "Sending ACK: ";
                 msg += to_string(sendack.getSeqNum());
+                writeLog(msg);
                 //now reply the client with the same data
                 if (sendto(s, sendack.getRawData(), 7, 0, (struct sockaddr*) &si_other, slen) == -1)
                 {
                     die("sendto()");
                 }
                 cwh++;
-                
             } while(windowbuff[cwh] != 0x00);
             if(eoffound) {
                     writeLog("EOF found\n");
@@ -179,15 +172,13 @@ int main(int argc, char** args) {
             sendack.setChecksum();
 
             if(receivedPacket.getSeqNum() <= lfa && receivedPacket.getSeqNum() >= exp_packet) {
-               writeLog("Writting in window"); 
+               writeLog("Writting in window");
                windowbuff[receivedPacket.getSeqNum() - exp_packet] = receivedPacket.getData();
             } else {
                 writeLog("Rejecting packet");
                 continue;
             }
-        }   
-   
-    }
+        }    }
     shutdown(s, 2);
     return 0;
 }
