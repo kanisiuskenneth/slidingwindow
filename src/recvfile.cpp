@@ -4,33 +4,62 @@
 #include <sys/socket.h> // Needed for socket creating and binding
 #include <netinet/in.h> // Needed to use struct sockaddr_in
 #include <arpa/inet.h>
+#include <time.h>       // To control the timeout mechanism
+#include <string>
 #include <component/packet.cpp>
 #include <component/ack.cpp>
-#include <time.h>       /* time */
 #include <unistd.h>
+#include <algorithm>
+
 using namespace std; 
 
  
 #define buffersize 256  //Max length of buffer
-void die(char* s)
+void die(string s)
 {
-    perror(s);
+    perror(s.c_str());
     exit(1);
 }
 
 void flushbuffer(char* buffer, FILE * of, int len) {
-    printf("writting: %s\n", buffer);
+    fprintf(stderr, "writting: %s\n", buffer);
     for(int i=0; i< len; i++) {
         fprintf(of, "%c", buffer[i]);
         buffer[i] = 0x0;
     }
 }
 
+void writeLog(string message) {
+    time_t now = time (0);
+    char time[50];
+    FILE * log;
+    strftime (time, 100, "%Y-%m-%d %H:%M:%S", localtime (&now));
+    log = fopen("log/recvfile.log", "a");
+    fprintf(stderr, "%s\n", message.c_str());
+    fprintf (log,"%s: ", time);
+    fprintf(log, "%s\n", message.c_str());
+    fclose(log);
+}
+
+
 int main(int argc, char** args) {
 	if(argc < 5) {
 		fprintf(stderr, "Arguments must be: <filename> <windowsize> <buffersize> <port>\n");
 		return 1;
 	}
+
+    time_t now = time (0);
+    char timex[50];
+    srand(time(NULL));
+    FILE * log;
+    log = fopen("log/recvfile.log", "w");
+    fprintf(log, "Program Started at: ");
+    strftime (timex, 100, "%Y-%m-%d %H:%M:%S.000", localtime (&now));
+    fprintf (log,"%s\n", timex);
+    fclose(log);
+
+    string msg; 
+
 	int windowsize = atoi(args[2]);
 	int port = atoi(args[4]);
     char* filename = args[1];
@@ -41,7 +70,7 @@ int main(int argc, char** args) {
     }
     struct sockaddr_in si_me, si_other;
      
-    unsigned int s, i, slen = sizeof(si_other) , recv_len;
+    unsigned int s, slen = sizeof(si_other) , recv_len;
     char buf[9];
      
     //create a UDP socket
@@ -60,20 +89,24 @@ int main(int argc, char** args) {
     //bind socket to port
     if( bind(s , (struct sockaddr*)&si_me, sizeof(si_me) ) == -1)
     {
+        writeLog("Binding failed");
         die("bind");
     }
+
+    writeLog("Socket Created, binded to port");
     FILE * of;
     of = fopen (filename,"w");
     if(!of) {
         exit(1);
     }
+    writeLog("Output file created");
     //keep listening for data
-    int bp(0), sbp(0), exp_packet(0), lfa;
+    int bp(0), exp_packet(0), lfa;
     bool endloop = false;
     while(!endloop)
     {
         lfa = exp_packet + windowsize;
-        printf("Waiting for data...");
+        writeLog("Waiting for data...");
         fflush(stdout);
         
 
@@ -85,59 +118,77 @@ int main(int argc, char** args) {
         Packet receivedPacket(buf);
 
         //print details of the client/peer and the data received
-        printf("Received packet from %s:%d\n", inet_ntoa(si_other.sin_addr), ntohs(si_other.sin_port));
-        printf("Data: %d %x\n", receivedPacket.getSeqNum(), receivedPacket.getData());
+        msg = "Received Packet from ";
+        msg += inet_ntoa(si_other.sin_addr);
+        msg += " ";
+        msg += to_string(ntohs(si_other.sin_port));
+        writeLog(msg);
+        msg = "Data(SeqNum, Data): ";
+        msg += to_string(receivedPacket.getSeqNum());
+        char hexData[4];
+        sprintf(hexData, "0x%02x", receivedPacket.getData());
+        msg += " ";
+        msg += hexData;
+        writeLog(msg);
+
         if(receivedPacket.getSeqNum() == exp_packet) {
-            printf("Expected data found, writting in buffer, sliding window\n");
+            writeLog("Expected data found, writting in buffer, sliding window\n");
             windowbuff[0] = receivedPacket.getData();
+            bool eoffound = (receivedPacket.getRawData()[0] & 0xff) == 0xff;
             int cwh = 0;
-            while(windowbuff[cwh] != 0x00) {
+            do { 
+                if(eoffound) {
+                    continue;
+                }
+                buffer[bp] = windowbuff[cwh];
+                bp++;
                 if(bp == buffersize) {
-                    printf("buffer filled flushing buffer\n") ;
+                    writeLog("Buffer filled flushing buffer\n") ;
                     flushbuffer(buffer, of, buffersize);
                     bp = 0;
                 }
-                if((windowbuff[cwh] & 0xff) == 0xff) {
-                    printf("EOF found\n");
-                    endloop = true;
-                    flushbuffer(buffer, of, bp);
-                    fclose(of);
-                } else {
-                    printf("writting in buffer: %c\n", windowbuff[cwh]);
-                    buffer[bp] = windowbuff[cwh];
-                    bp++;
-                }
                 windowbuff[cwh]  = 0x00;
                 Ack sendack;
-                sendack.setSeqNum(receivedPacket.getSeqNum()+1);
-                sendack.setAWS(buffersize - bp);
+                exp_packet++;
+                sendack.setSeqNum(exp_packet);
+                sendack.setAWS(min(buffersize - bp, windowsize));
                 sendack.setChecksum();
-                printf("Sending ACK: %d\n", sendack.getSeqNum());
+
+                msg = "Sending ACK: ";
+                msg += to_string(sendack.getSeqNum());
                 //now reply the client with the same data
                 if (sendto(s, sendack.getRawData(), 7, 0, (struct sockaddr*) &si_other, slen) == -1)
                 {
                     die("sendto()");
                 }
-                exp_packet++;
                 cwh++;
                 
+            } while(windowbuff[cwh] != 0x00);
+            if(eoffound) {
+                    writeLog("EOF found\n");
+                    writeLog("Terminating Connection");
+                    endloop = true;
+                    flushbuffer(buffer, of, bp);
+                    fclose(of);
             }
         } else {
-            printf("Expected data not found, ");
+            writeLog("Expected data not found, ");
+            Ack sendack;
+            sendack.setSeqNum(exp_packet);
+            sendack.setAWS(min(buffersize - bp, windowsize));
+            sendack.setChecksum();
+
             if(receivedPacket.getSeqNum() <= lfa && receivedPacket.getSeqNum() >= exp_packet) {
-               printf("writting in window\n;"); 
+               writeLog("Writting in window"); 
                windowbuff[receivedPacket.getSeqNum() - exp_packet] = receivedPacket.getData();
             } else {
-                printf("rejecting packet\n");
+                writeLog("Rejecting packet");
                 continue;
             }
         }   
-        srand(time(NULL));
-        int sleep = rand() % 1000000;
-        printf("sleeping for(microsec):%d\n", sleep);
+        int sleep = rand() % 5000000;
         usleep(sleep);
     }
-    printf("\n");
     shutdown(s, 2);
     return 0;
 }

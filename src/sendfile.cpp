@@ -11,37 +11,72 @@
 #include <component/packet.cpp>
 #include <component/ack.cpp>
 #include <unistd.h>
+#include <algorithm>
 #define buffersize 256
 using namespace std; 
+
+void writeLog(string message) {
+	time_t now = time (0);
+	char time[50];
+	FILE * log;
+	strftime (time, 100, "%Y-%m-%d %H:%M:%S", localtime (&now));
+	log = fopen("log/sendfile.log", "a");
+	fprintf(stderr, "%s\n", message.c_str());
+	fprintf (log,"%s: ", time);
+	fprintf(log, "%s\n", message.c_str());
+	fclose(log);
+}
+
+
 
 void flushbuffer(char* buffer, FILE * ifile, int &len, bool &lastflush) {
 	int it= 0;
 	char data;
-	while(fscanf(ifile,"%c",&data) != EOF && it < buffersize) {
+	writeLog("Flushing Buffer, rewriting buffer with:");
+	while(it < buffersize && fscanf(ifile,"%c",&data) != EOF) {
 		buffer[it] = data;
 		it++;
 	}
-	if(it!=buffersize) {
-		buffer[it] = EOF;
-		it++;
+	if(it != buffersize) {
 		lastflush = true;
 	}
+	writeLog(buffer);
 	len = it;
 }
 
-int main(int argc, char** args) {
-	//Kamus 
+void itostring(uint32_t x, string &s) {
+	s = "";
+	if(x == 0) {
+		s = "0";
+		return;
+	}
+	while (x > 0) {
+		s.insert(s.begin(),((x%10) + '0'));
+		x = x/10;
+	}
+}
 
+int main(int argc, char** args) {
 	char* filename;
 	int windowsize;
 	char* destination_ip;
 	int destination_port;
 	char* buffer;
+	time_t now = time (0);
+	char time[100];
+	
+	FILE * log;
+	log = fopen("log/sendfile.log", "w");
+	fprintf(log, "Program Started at: ");
+	strftime (time, 100, "%Y-%m-%d %H:%M:%S.000", localtime (&now));
+    fprintf (log,"%s\n", time);
+    fclose(log);
 
 	if(argc != 6) {
 		printf("Arguments must be: <filename> <windowsize> <buffersize> <destination_ip> <destination_port>\n");
+		writeLog("Argument not found, program exiting");
 		return 1;
-	} 
+	}  
 	filename = args[1];
 	windowsize = atoi(args[2]);
 	destination_ip = args[4];
@@ -50,7 +85,7 @@ int main(int argc, char** args) {
 	//printf("%s %d %d %s %d", filename.c_str(), windowsize, buffersize, destination_ip.c_str(), destination_port);
 	int fd;
     if ( (fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0 ) {
-        perror("socket failed");
+        writeLog("Socket Failed");
         return 1;
     }
 
@@ -58,7 +93,7 @@ int main(int argc, char** args) {
 	tv.tv_sec = 1;
 	tv.tv_usec = 0;
 	if (setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO,&tv,sizeof(tv)) < 0) {
-	    perror("Error");
+	   writeLog("Socket Error");
 	}
     struct sockaddr_in serveraddr, rbuffer;
     memset( &serveraddr, 0, sizeof(serveraddr) );
@@ -67,80 +102,108 @@ int main(int argc, char** args) {
     serveraddr.sin_addr.s_addr = inet_addr(destination_ip);
     
 	FILE * ifile;
- 	 ifile = fopen (filename,"r");
+ 	ifile = fopen (filename,"r");
+ 	writeLog(("Opening source file"));
  	 if(ifile) {
  	 	int filledlength;
  	 	bool lastflush;
- 	 	uint32_t lsf(0), exp_ack(1), cwst ,cws, cwp(0), bp(0), sbp(0), slsf(0);
+ 	 	uint32_t cws(0), bp(0);
+ 	 	uint32_t lfs = 0, lar = 0, start_lfs, start_bp;
  	 	cws = windowsize;
+ 	 	lfs = 0;
  	 	flushbuffer(buffer, ifile, filledlength, lastflush);
  	 	bool endloop = 0;
- 	 	printf("%d %d\n", filledlength, lastflush);
+ 	 	start_lfs = lfs;
+ 	 	start_bp = bp;
  	 	while(!endloop) {
- 	 		printf("Starting Window: bufferpointer:%d startseqnum%d \n",sbp, slsf);
- 	 		while(cwp < cws && bp < filledlength) {
- 	 			cwst = cwp;
- 	 			Packet sendpacket(buffer[bp], lsf);
- 	 			lsf++;
+ 	 		string buf;
+ 	 		
+ 	 		string msg = "Starting Window (LAR, LFS, CWS): ";
+ 	 		itostring(lar, buf);
+ 	 		msg+=buf;
+ 	 		itostring(lfs, buf);
+ 	 		msg += " ";
+ 	 		msg+=buf;
+
+ 	 		msg += " ";
+ 	 		itostring(cws, buf);
+ 	 		msg+=buf;
+ 	 		writeLog(msg);
+
+ 	 		while((lfs - lar) <= cws && bp < filledlength) {
+ 	 			char datastring[5];
+ 	 			sprintf(datastring,"0x%02x" , buffer[bp]);
+
+ 	 			Packet sendpacket(buffer[bp], lfs);
+ 	 			lfs++;
  	 			bp++;
- 	 			cwp++;
- 	 			printf("sending: data:%c seqnum:%u\n", sendpacket.getData(), sendpacket.getSeqNum());
+ 	 			string msg = "Sending Data (data, seqnum): ";
+ 	 			msg += datastring;
+ 	 			msg += " ";
+ 	 			msg += to_string(sendpacket.getSeqNum());
+
+ 	 			writeLog(msg);
 		    	if (sendto( fd, sendpacket.getRawData(), 9, 0, (struct sockaddr *)&serveraddr, sizeof(serveraddr)) < 0 ) {
-		            perror( "sendto failed" );
+		            writeLog("Sending Failed");
 	    	        break;
 		        }
-		        fprintf(stderr, "%c", sendpacket.getData());
-		        printf( "message sent\n" );
+		        writeLog( "Message Sent" );
 	    	}
 	    	char data[7];
 	    	uint32_t slen;
 
 	    	if(recvfrom(fd, data, 7, 0, (struct sockaddr *) &rbuffer,  &slen) < 0) {
-	    		printf("timout, reseting window\n");
-	    		bp = sbp;
-	    		lsf = slsf;
-		 		cwp = 0;
+	    		writeLog("Timeout, resetting window");
+	    		bp = start_bp;
+	    		lfs = start_lfs;
 	 		} else {
 		 		Ack rack(data);
-		 		printf("%u %u\n", rack.getSeqNum(), exp_ack);
-		 		if(rack.getSeqNum() != exp_ack || !rack.checkChecksum()) {
-		 			printf("expected ack not found, reseting window\n");
-		 			bp = sbp;
-		 			lsf = slsf;
-		 			cwp = max(0, windowsize-(rack.getAWS()));
+		 		string seqnumstring;
+		 		itostring(rack.getSeqNum(), seqnumstring);
+		 		string msg = "Got ACK (seqnum): ";
+		 		msg += seqnumstring;
+		 		writeLog(msg); 
+		 		if(rack.getSeqNum() != lar+1 || !rack.checkChecksum()) {
+		 			writeLog("Expected ack not found, reseting window\n");
+		 			bp = start_bp;
+		 			lfs = start_lfs;
 		 			
+					cws = min(min((uint32_t)windowsize, (uint32_t)rack.getAWS()), (uint32_t)(filledlength - bp - 1));	 			
 		 		} 
 		 		else {
-		 			exp_ack++;
-		 			cwp--;
-		 			sbp++;
-		 			slsf++;
+		 			start_bp++;
+		 			start_lfs++;
+		 			lar++;
+		 			cws = min(cws, (uint32_t)rack.getAWS());	 			
 		 			if(bp == filledlength) {
+		 				writeLog("Expected ack found, ready to receiving next data");
 		 				if(!lastflush) {
-		 					printf("buffer used, flushing buffer\n");
-		 					flushbuffer(buffer,ifile,filledlength,lastflush);
-		 					
-		 					printf("%s\n", buffer);
+		 					writeLog("Buffer used, flushing buffer");
+		 					flushbuffer(buffer,ifile,filledlength,lastflush);		 					
 			 				bp=0;
-			 				sbp = 0;
-			 				cwp = 0;
 		 				} else {
-		 					cwp++;
-		 					if(rack.getSeqNum() == lsf) {
+		 					if(rack.getSeqNum() == lfs) {
 			 					endloop = true;
-			 					printf("Transfer Done\n");
+			 					writeLog("Transfer Done");
 			 					break;
 		 					}	
 		 				}
 		 				
+		 			} else {
+		 				writeLog("Expected ack found, sending next data");
 		 			}
-		 			printf("expected ack found, sending next data\n");
 		 		}
 		 	}
 	    }
 	    fclose(ifile);
+	    fclose(log);
+
+	 	 Packet terminator(0x00, lfs);
+	 	 terminator.setAsEnd();
+	 	 sendto( fd, terminator.getRawData(), 9, 0, (struct sockaddr *)&serveraddr, sizeof(serveraddr));
+	     
  	 }
-     
+
      shutdown(fd, 2);
 	return 0;
 }

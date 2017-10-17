@@ -66,6 +66,9 @@ class Packet {
 		return data[8] == sum;
 	}
 
+	void setAsEnd() {
+		data[0] = 0xff;
+	}
 
 	int getSize() {
 		return sizeof(data);
