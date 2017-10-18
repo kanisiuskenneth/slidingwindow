@@ -6,8 +6,8 @@
 #include <arpa/inet.h>
 #include <time.h>       // To control the timeout mechanism
 #include <string>
-#include <component/packet.cpp>
-#include <component/ack.cpp>
+#include <packet.cpp>
+#include <ack.cpp>
 #include <unistd.h>
 #include <algorithm>
 
@@ -33,8 +33,7 @@ void writeLog(string message) {
     char time[50];
     FILE * log;
     strftime (time, 100, "%Y-%m-%d %H:%M:%S", localtime (&now));
-    log = fopen("log/recvfile.log", "a");
-    fprintf(stderr, "%s\n", message.c_str());
+    log = fopen("recvfile.log", "a");
     fprintf (log,"%s: ", time);
     fprintf(log, "%s\n", message.c_str());
     fclose(log);
@@ -51,7 +50,7 @@ int main(int argc, char** args) {
     char timex[50];
     srand(time(NULL));
     FILE * log;
-    log = fopen("log/recvfile.log", "w");
+    log = fopen("recvfile.log", "w");
     fprintf(log, "Program Started at: ");
     strftime (timex, 100, "%Y-%m-%d %H:%M:%S.000", localtime (&now));
     fprintf (log,"%s\n", timex);

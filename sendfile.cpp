@@ -8,31 +8,32 @@
 #include <arpa/inet.h>
 #include <time.h>       // To control the timeout mechanism
 #include <string>
-#include <component/packet.cpp>
-#include <component/ack.cpp>
+#include <packet.cpp>
+#include <ack.cpp>
 #include <unistd.h>
 #include <algorithm>
 #define buffersize 256
 using namespace std; 
 
-void writeLog(string message) {
+//void writeLog(string message) {
+	/*
 	time_t now = time (0);
 	char time[50];
 	FILE * log;
 	strftime (time, 100, "%Y-%m-%d %H:%M:%S", localtime (&now));
-	log = fopen("log/sendfile.log", "a");
-	fprintf(stderr, "%s\n", message.c_str());
+	log = fopen("sendfile.log", "a");
 	fprintf (log,"%s: ", time);
 	fprintf(log, "%s\n", message.c_str());
 	fclose(log);
-}
+	*/
+//}
 
 
 
 void flushbuffer(char* buffer, FILE * ifile, uint32_t &len, bool &lastflush) {
 	int it= 0;
 	char data;
-	writeLog("Flushing Buffer, rewriting buffer with:");
+	//writeLog("Flushing Buffer, rewriting buffer with:");
 	while(it < buffersize && fscanf(ifile,"%c",&data) != EOF) {
 		buffer[it] = data;
 		it++;
@@ -40,7 +41,7 @@ void flushbuffer(char* buffer, FILE * ifile, uint32_t &len, bool &lastflush) {
 	if(it != buffersize) {
 		lastflush = true;
 	}
-	writeLog(buffer);
+	//writeLog(buffer);
 	len = it;
 }
 
@@ -66,7 +67,7 @@ int main(int argc, char** args) {
 	char time[100];
 	
 	FILE * log;
-	log = fopen("log/sendfile.log", "w");
+	log = fopen("sendfile.log", "w");
 	fprintf(log, "Program Started at: ");
 	strftime (time, 100, "%Y-%m-%d %H:%M:%S.000", localtime (&now));
     fprintf (log,"%s\n", time);
@@ -74,7 +75,7 @@ int main(int argc, char** args) {
 
 	if(argc != 6) {
 		printf("Arguments must be: <filename> <windowsize> <buffersize> <destination_ip> <destination_port>\n");
-		writeLog("Argument not found, program exiting");
+		//writeLog("Argument not found, program exiting");
 		return 1;
 	}  
 	filename = args[1];
@@ -85,7 +86,7 @@ int main(int argc, char** args) {
 	//printf("%s %d %d %s %d", filename.c_str(), windowsize, buffersize, destination_ip.c_str(), destination_port);
 	int fd;
     if ( (fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0 ) {
-        writeLog("Socket Failed");
+        //writeLog("Socket Failed");
         return 1;
     }
 
@@ -94,13 +95,13 @@ int main(int argc, char** args) {
     }
 
     struct timeval tv;
-	tv.tv_sec = 1;
-	tv.tv_usec = 0;
+	tv.tv_sec = 0;
+	tv.tv_usec = 200000;
 	if (setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO,&tv,sizeof(tv)) < 0) {
-	   writeLog("Socket Error");
+	   //writeLog("Socket Error");
 	}
 	if (setsockopt (fd, SOL_SOCKET, SO_SNDTIMEO, &tv,sizeof(tv)) < 0) {
-		writeLog("Socket Error");
+		//writeLog("Socket Error");
 	}
 
     struct sockaddr_in serveraddr, rbuffer;
@@ -112,7 +113,8 @@ int main(int argc, char** args) {
 	FILE * ifile;
  	ifile = fopen (filename,"r");
  	clock_t begin = clock();
- 	writeLog(("Opening source file"));
+ 	//writeLog(("Opening source file"));
+ 	windowsize = min((unsigned)buffersize, windowsize);
  	 if(ifile) {
  	 	uint32_t filledlength;
  	 	bool lastflush = false;
@@ -135,7 +137,7 @@ int main(int argc, char** args) {
  	 		msg += " ";
  	 		itostring(cws, buf);
  	 		msg+=buf;
- 	 		writeLog(msg);
+ 	 		//writeLog(msg);
  	 		//fprintf(stderr, "%d %d %d\n",start_bp, bp, filledlength);
  	 		while((lfs - lar) <= cws && bp < filledlength) {
  	 			char datastring[5];
@@ -149,12 +151,12 @@ int main(int argc, char** args) {
  	 			msg += " ";
  	 			msg += to_string(sendpacket.getSeqNum());
 
- 	 			writeLog(msg);
+ 	 			//writeLog(msg);
 		    	if (sendto( fd, sendpacket.getRawData(), 9, 0, (struct sockaddr *)&serveraddr, sizeof(serveraddr)) < 0 ) {
-		            writeLog("Sending Failed");
+		            //writeLog("Sending Failed");
 	    	        break;
 		        }
-		        writeLog( "Message Sent" );
+		        //writeLog( "Message Sent" );
 	    	}
 
 
@@ -162,7 +164,7 @@ int main(int argc, char** args) {
 	    	uint32_t slen;
 
 	    	if(recvfrom(fd, data, 7, 0, (struct sockaddr *) &rbuffer,  &slen) < 0) {
-	    		writeLog("Timeout, resetting window");
+	    		//writeLog("Timeout, resetting window");
 	    		bp = start_bp;
 	    		lfs = start_lfs;
 	 		} else {
@@ -171,9 +173,9 @@ int main(int argc, char** args) {
 		 		itostring(rack.getSeqNum(), seqnumstring);
 		 		string msg = "Got ACK (seqnum): ";
 		 		msg += seqnumstring;
-		 		writeLog(msg);
+		 		//writeLog(msg);
 		 		if(rack.getSeqNum() < lar+1 || !rack.checkChecksum()) {
-		 			writeLog("Expected ack not found, reseting window\n");
+		 			//writeLog("Expected ack not found, reseting window\n");
 		  			bp = start_bp;
 		 			lfs = start_lfs;
 					cws = min(min((uint32_t)windowsize, (uint32_t)rack.getAWS()), (uint32_t)(filledlength - bp));
@@ -184,13 +186,13 @@ int main(int argc, char** args) {
 		 				start_bp++;
 		 				if(start_bp>=filledlength) {
 		 					if(!lastflush) {
-			 					writeLog("Buffer used, flushing buffer");
+			 					//writeLog("Buffer used, flushing buffer");
 			 					flushbuffer(buffer,ifile,filledlength,lastflush);
 				 				bp=0;
 				 				start_bp=0;
 			 				} else {
 				 				endloop = true;
-				 				writeLog("Transfer Done");
+				 				//writeLog("Transfer Done");
 				 				break;
 		 					}
 		 				}
@@ -209,24 +211,24 @@ int main(int argc, char** args) {
 	 	terminator.setAsEnd();
 	 	int count = 0;
 	    while( count < 10) {
-	    	writeLog("Sending Terminator Packet...");
+	    	//writeLog("Sending Terminator Packet...");
 	 		sendto( fd, terminator.getRawData(), 9, 0, (struct sockaddr *)&serveraddr, sizeof(serveraddr));
 	 		char data[7];
 	 		socklen_t slen;
 	 		if(recvfrom(fd, data, 7, 0, (struct sockaddr *) &rbuffer,  &slen) >= 0) {
 	 			Ack tack(data);
 	 			if(tack.getSeqNum() > lfs  && tack.checkChecksum()) {
-	 				writeLog("ACK for terminator packet has been received, ending program...");
+	 				//writeLog("ACK for terminator packet has been received, ending program...");
 	 				break;
 	 			} 
 	 		} else{
-	 			writeLog("Timeout");
+	 			//writeLog("Timeout");
 	 		}
-	 		writeLog("ACK for terminator packet haven't been received, resending terminator packet");
+	 		//writeLog("ACK for terminator packet haven't been received, resending terminator packet");
 	 		count ++;
 	 	}
 	 	if(count == 10) {
-	 		writeLog("Receiver doesn't responding, ending program");
+	 		//writeLog("Receiver doesn't responding, ending program");
 	 	}
 	 	clock_t end = clock();
 	 	char timestamp[20];
@@ -235,7 +237,7 @@ int main(int argc, char** args) {
 	 	string msg = "Program ended: ";
 	 	msg += timestamp;
 	 	msg += " s elapsed";
-	 	writeLog(msg);
+	 	//writeLog(msg);
 
      shutdown(fd, 2);
 	}
